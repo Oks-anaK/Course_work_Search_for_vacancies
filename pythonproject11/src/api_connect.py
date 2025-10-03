@@ -1,88 +1,137 @@
+import time
 from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
+
 import requests
+
 
 class ApiVacancies(ABC):
     """Абстрактный класс для работы с API сервиса с вакансиями."""
 
-    def __init__(self, api_key=None):
+    def __init__(self, api_key: Optional[str] = None) -> None:
         """Инициализация с общим ключом API (если требуется)."""
-        self.api_key = api_key  # Сохраняем API-ключ (если передан)
+        self._api_key: Optional[str] = api_key  # Защищенный атрибут
+        self._connected: bool = False  # Атрибут для отображения коннекта к АПИ
 
     @abstractmethod
-    def connect_api(self):
-        """Метод для подключения к API."""
-        pass
-
-    @abstractmethod
-    def load_vacancies(self, keyword):
+    def load_vacancies(self, keyword: str) -> None:
         """Метод для загрузки вакансий по ключевому слову."""
-        pass
+        raise NotImplementedError
+
+    @property
+    def api_key(self) -> Optional[str]:
+        """Геттер для api_key."""
+        return self._api_key
+
+    @api_key.setter
+    def api_key(self, api_key: Optional[str]) -> None:
+        """Сеттер для api_key."""
+        self._api_key = api_key
+
+    @property
+    def is_connected(self) -> bool:
+        """Геттер для статуса подключения к апи."""
+        return self._connected
 
 
 class VacanciesHh(ApiVacancies):
-    """Класс для работы с платформой hh.ru."""
+    """Класс, наследующийся от абстрактного класса, для работы с платформой hh.ru."""
 
-    def __init__(self, api_key=None):
-        """Инициализация параметров для HH.ru."""
+    def __init__(self, api_key: Optional[str] = None) -> None:
+        """Функция инициализации атрибутов."""
         super().__init__(api_key)
-        self.url = 'https://api.hh.ru/vacancies'
-        self.headers = {'User-Agent': 'HH-User-Agent'}
-        self.params = {'text': '', 'page': 0, 'per_page': 100, 'area': 113} #Добавил параметр area - вся Россия
-        self.vacancies_data = [] #Переименовал vacancies в vacancies_data чтобы отличать от списка объектов Vacancy
-        self.connected = False  # Флаг, показывающий, что подключение установлено
+        self.__url: str = "https://api.hh.ru/vacancies"
+        self.__headers: Dict[str, str] = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/91.0.4472.124 Safari/537.36"
+        }
+        self.__params: Dict[str, Any] = {"text": "", "page": 0, "per_page": 100, "area": 113}
+        self.__vacancies_data: List[Dict[str, Any]] = []
 
-    def connect_api(self):
-        """Подключение к API hh.ru."""
+    def _connect_api(self) -> None:
+        """Приватный метод для подключения к API hh.ru."""
         try:
-            #Проверим доступность API:
-            response = requests.get(self.url, headers=self.headers)
+            response = requests.get(self.__url, headers=self.__headers)
             response.raise_for_status()
-            self.connected = True  # Устанавливаем флаг, если подключение успешно
+            self._connected = True  # Устанавливаем флаг в родительском классе
             print("Успешно подключились к API hh.ru")
 
         except requests.exceptions.RequestException as e:
             print(f"Ошибка при подключении к API hh.ru: {e}")
-            self.connected = False
+            self._connected = False  # Устанавливаем флаг в родительском классе
             raise  # Re-raise exception чтобы указать на невозможность продолжения работы
 
-    def load_vacancies(self, keyword):
+    def load_vacancies(self, keyword: str, per_page: int = 10) -> None:
         """Загрузка вакансий с hh.ru по ключевому слову."""
-        if not self.connected:
-            print("Необходимо сначала подключиться к API (вызвать connect_api)")
-            return  # Выходим, если не подключены
+        if not self.is_connected:  # Используем геттер родительского класса
+            try:  # Пытаемся подключиться к АПИ
+                self._connect_api()  # вызываем protected метод
+            except Exception:
+                print("Не удалось подключиться к API. Загрузка вакансий невозможна.")
+                return
 
-        self.params['text'] = keyword
-        self.params['page'] = 0  # сбрасываем страницу на 0 при каждом запросе вакансий по новому ключевому слову
-        self.vacancies_data = []  # очищаем предыдущие вакансии при каждом запросе по новому ключевому слову
+        self.__params["text"] = keyword
+        self.__params["page"] = 0  # Начинаем с первой страницы
+        self.__params["per_page"] = per_page  # Устанавливаем per_page(количество объектов)
+        self.__vacancies_data = []
 
-        while self.params.get('page') != 20:
+        while self.__params.get("page") != 20:  # Лимит в 20 страниц
             try:
-                response = requests.get(self.url, headers=self.headers, params=self.params)
+                response = requests.get(self.__url, headers=self.__headers, params=self.__params)
                 response.raise_for_status()
-                vacancies = response.json()['items']
-                self.vacancies_data.extend(vacancies)
-                self.params['page'] += 1
+                vacancies: List[Dict[str, Any]] = response.json()["items"]
+                self.__vacancies_data.extend(vacancies)
+                self.__params["page"] += 1
+                time.sleep(0.5)  # Задержка
+
             except requests.exceptions.RequestException as e:
                 print(f"Ошибка при запросе к API: {e}")
-                break  # Прерываем цикл при ошибке
+                break
 
-    def get_vacancies(self):
-        return self.vacancies_data
+    def get_vacancies(self) -> List[Dict[str, Any]]:
+        """Геттер для списка вакансий."""
+        return self.__vacancies_data
 
-# Пример использования:
-if __name__ == '__main__':
-    hh_api = VacanciesHh()
-    try:
-        hh_api.connect_api()  # Сначала подключаемся к API
-        hh_api.load_vacancies("Python")
-        vacancies = hh_api.get_vacancies()
+    # Геттеры и сеттеры для других атрибутов (по необходимости)
+    @property
+    def url(self) -> str:
+        """Геттер для url."""
+        return self.__url
 
-        if vacancies:
-            print(f"Найдено {len(vacancies)} вакансий.")
-            # Дальнейшая обработка вакансий
-            for vacancy in vacancies:
-                print(vacancy['name']) # Пример вывода названий вакансий
-        else:
-            print("Не удалось загрузить вакансии.")
-    except requests.exceptions.RequestException:
-        print("Не удалось выполнить запрос из-за проблем с подключением к API.")
+    @url.setter
+    def url(self, new_url: str) -> None:
+        """Сеттер для url."""
+        self.__url = new_url
+
+    @property
+    def params(self) -> Dict[str, Any]:
+        """Геттер для параметров."""
+        return self.__params
+
+    @params.setter
+    def params(self, new_params: Dict[str, Any]) -> None:
+        """Cеттер для параметров."""
+        self.__params = new_params
+
+    def set_params_text(self, text: str) -> None:
+        """Сеттер для изменения текста."""
+        self.__params["text"] = text
+
+
+# # Пример использования:
+# if __name__ == "__main__":
+#     hh_api = VacanciesHh()
+#     try:
+#         hh_api._connect_api()  # Сначала подключаемся к API
+#         hh_api.load_vacancies("Python")
+#         vacancies = hh_api.get_vacancies()
+#
+#         if vacancies:
+#             print(f"Найдено {len(vacancies)} вакансий.")
+#             # Дальнейшая обработка вакансий
+#             for vacancy in vacancies:
+#                 print(vacancy)  # Пример вывода названий вакансий ['name'])
+#         else:
+#             print("Не удалось загрузить вакансии.")
+#     except requests.exceptions.RequestException:
+#         print("Не удалось выполнить запрос из-за проблем с подключением к API.")

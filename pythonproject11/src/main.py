@@ -1,74 +1,54 @@
-# def user_interaction():
-#     platforms = ["HeadHunter"]
-#     search_query = input("Введите поисковый запрос: ")
-#     top_n = int(input("Введите количество вакансий для вывода в топ N: "))
-#     filter_words = input("Введите ключевые слова для фильтрации вакансий: ").split()
-#
-#     [print(v) for v in sorted(_list, reverse=True)]
-#     filtered_vacancies = filter_vacancies(vacancies_list, filter_words)
-#
-#     ranged_vacancies = get_vacancies_by_salary(filtered_vacancies, salary_range)
-#
-#     sorted_vacancies = sort_vacancies(ranged_vacancies)
-#     top_vacancies = get_top_vacancies(sorted_vacancies, top_n)
-#     print_vacancies(top_vacancies)
-#
-#
+from typing import Optional
 
-
-# if __name__ == "__main__":
-#     user_interaction()
-import requests
 from pythonproject11.src.api_connect import VacanciesHh
-from pythonproject11.src.vacancies import Vacancy
 from pythonproject11.src.open_files import JsonHandler
+from pythonproject11.src.processing_data import create_vacancy_objects
 
-def get_vacancy_description(vacancy_url):
-    """Получает описание вакансии по URL."""
+
+def main() -> None:
+    """Основная функция для выполнения поиска вакансий,
+    взаимодействия с API, обработки данных и сохранения в файл."""
+
+    user_keyword: Optional[str] = None
+    user_number_vacancies: Optional[int] = None
+
     try:
-        response = requests.get(vacancy_url)
-        response.raise_for_status()
-        vacancy_data = response.json()
-        return vacancy_data.get('description', 'Описание не указано')
-    except requests.exceptions.RequestException as e:
-        print(f"Ошибка при получении информации о вакансии: {e}")
-        return "Описание не удалось загрузить"
+        user_keyword = str(input("Введите необходимое слово для поиска по вакансиям: "))
+        user_number_vacancies = int(
+            input("Введите количество вакансий, которые вы хотите получить (не менее 20 и не более 2000): ")
+        )
+    except (ValueError, TypeError):
+        print("Неправильный ввод. Попробуйте снова.")
+        return
 
-def extract_salary(salary_data):
-    """Извлекает данные о зарплате."""
-    salary_from = salary_data.get('from') if salary_data else None
-    salary_to = salary_data.get('to') if salary_data else None
-    return salary_from, salary_to
+    hh_api = VacanciesHh()
+    hh_api._connect_api()  # Сначала подключаемся к API
 
-def create_vacancy_objects(vacancies_data):
-    """Создает список объектов Vacancy."""
-    vacancies = []
-    for data in vacancies_data:
-        title = data.get('name', 'Название не указано')
-        url = data.get('alternate_url', 'URL не указан')
-        salary_from, salary_to = extract_salary(data.get('salary'))
-        description = get_vacancy_description(data.get('url'))
-        vacancy = Vacancy(title, url, salary_from, salary_to, description)
-        vacancies.append(vacancy)
-    return vacancies
+    if 20 <= user_number_vacancies <= 2000:  # Проверяем введенное значение
+        user_number_vacancies_valid = round(user_number_vacancies / 20)
 
-def main():
-    hh = VacanciesHh()
-    hh.connect_api()
-    hh.load_vacancies("Python")
-    vacancies_data = hh.get_vacancies()
+        hh_api.load_vacancies(user_keyword, per_page=user_number_vacancies_valid)
+        vacancies_data = hh_api.get_vacancies()
+
+    else:
+        print("Запрос превысил доступный диапазон (от 20 до 2000). Попробуйте снова.")
+        return
 
     vacancies = create_vacancy_objects(vacancies_data)
 
-    [print(v) for v in sorted(vacancies, reverse=True)[:5]]
+    vacancies_to_add = [vacancy.cast_to_dict() for vacancy in vacancies]
 
-    filename = 'vacancies.json'
+    filename = "vacancies.json"
     json_handler = JsonHandler(filename)
 
-    json_handler.add_vacancies(vacancies)
+    json_handler.add_vacancies(vacancies_to_add)
 
     new_vacancies = json_handler.read_vacancies()
+    print(new_vacancies)
 
-if __name__ == '__main__':
-    main()
 
+# if __name__ == "__main__":
+#     try:
+#         main()
+#     except Exception as e:
+#         print(f"Возникли проблемы с функцией main {e}.")

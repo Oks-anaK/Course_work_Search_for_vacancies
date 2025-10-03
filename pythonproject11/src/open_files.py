@@ -1,68 +1,109 @@
-from abc import ABC, abstractmethod
 import json
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict, Iterable, List, cast
+
 
 class Handler(ABC):
     """Абстрактный класс, который обязывает реализовать методы для добавления вакансий в файл,
     получения данных из файла по указанным критериям и удаления информации о вакансиях."""
 
-    @abstractmethod
-    def __init__(self, filename):
+    def __init__(self, filename: str) -> None:
+        """Функция инициализации атрибутов."""
         pass
 
     @abstractmethod
-    def read_vacancies(self):
+    def read_vacancies(self) -> List[Dict[str, Any]]:
+        """Функция чтения вакансий."""
         pass
 
     @abstractmethod
-    def add_vacancies(self, data_to_add):
+    def add_vacancies(self, data_to_add: Iterable[Dict[str, Any]]) -> None:
+        """Функция добавления вакансий."""
+        pass
+
+    @abstractmethod
+    def remove_vacancies(self, criteria: Callable[[Dict[str, Any]], bool]) -> None:
+        """Функция удаления вакансий."""
         pass
 
 
 class JsonHandler(Handler):
-    """Класс для сохранения информации о вакансиях в JSON-файл."""
-    def __init__(self, filename):
+    """Класс, наследующийся от абстрактного класса, для добавления, чтения, удаления информации
+    о вакансиях в JSON-файл."""
+
+    def __init__(self, filename: str = "vacancies.json") -> None:
+        """Функция инициализации атрибутов."""
         super().__init__(filename)
         self.__filename = filename
 
-    def read_vacancies(self):
-        """Читает вакансии из JSON-файла."""
+    def read_vacancies(self) -> Any:
+        """Функция чтения вакансий в json."""
         try:
-            with open(self.__filename, 'r', encoding='utf-8') as file:
+            with open(self.__filename, "r", encoding="utf-8") as file:
                 return json.load(file)
-        except FileNotFoundError:
-            return []  # Если файла нет, возвращаем пустой список
-        except json.JSONDecodeError:
-            return []  # Если файл пустой или содержит невалидный JSON
+        except (FileNotFoundError, json.JSONDecodeError):
+            return []
 
-    def add_vacancies(self, data_to_add):
-        """Добавляет вакансии в JSON-файл."""
-        data = self.read_vacancies()  # Читаем существующие вакансии
+    def add_vacancies(self, data_to_add: Iterable[Dict[str, Any]]) -> None:
+        """Функция добавления новых вакансий в json."""
+        try:
+            data = self.read_vacancies()
+            existing_urls = {vacancy["url"] for vacancy in data if "url" in vacancy}
 
-        if not data:  # Если файл пуст или не существует
-            with open(self.__filename, 'w', encoding='utf-8') as file:
-                json.dump(data_to_add, file, ensure_ascii=False, indent=4)
-            return
+            unique_new_vacancies = []
+            seen_urls_in_this_batch = set()
 
-        # Обновляем существующие вакансии с новыми данными (если нужно)
-        # Здесь логика зависит от того, как вы хотите обновлять данные.
-        # Например, добавить новые вакансии к существующим:
-        data.extend(data_to_add)
+            for vacancy in data_to_add:
+                url = vacancy.get("url")
+                if url:
+                    if url not in existing_urls and url not in seen_urls_in_this_batch:
+                        unique_new_vacancies.append(vacancy)
+                        seen_urls_in_this_batch.add(url)
+                else:
+                    unique_new_vacancies.append(vacancy)
 
-        with open(self.__filename, 'w', encoding='utf-8') as file:
-            json.dump(data, file, ensure_ascii=False, indent=4)
+            data.extend(unique_new_vacancies)
+            with open(self.__filename, "w", encoding="utf-8") as file:
+                json.dump(data, file, ensure_ascii=False, indent=4)
+        except IOError as e:
+            print(f"Ошибка записи в файл: {e}")
+
+    def remove_vacancies(self, criteria: Callable[[Dict[str, Any]], bool]) -> None:
+        """Функция удаления вакансий из json."""
+        try:
+            data = self.read_vacancies()
+            updated_data = [vacancy for vacancy in data if not criteria(vacancy)]
+            with open(self.__filename, "w", encoding="utf-8") as file:
+                json.dump(updated_data, file, ensure_ascii=False, indent=4)
+        except IOError as e:
+            print(f"Ошибка записи в файл: {e}")
+        except Exception as e:
+            print(f"Ошибка: {e}")
 
 
-# Пример использования:
-if __name__ == '__main__':
-    filename = 'vacancies.json'
-    json_handler = JsonHandler(filename)
+# # Пример функции критериев удаления по url
+# def criteria_func(vacancy):
+#     return vacancy.get("url") == "https://example.com/python-developer"
 
-    new_vacancies = [
-        {'id': 1, 'title': 'Python Developer', 'company': 'Google'},
-        {'id': 2, 'title': 'Data Scientist', 'company': 'Microsoft'}
-    ]
 
-    json_handler.add_vacancies(new_vacancies)
-
-    vacancies = json_handler.read_vacancies()
-    print(vacancies)
+# if __name__ == "__main__":
+#     filename = "vacancies.json"
+#     json_handler = JsonHandler(filename)
+#
+#     new_vacancies = [
+#         {"url": "https://example.com/python-developer", "title": "Python Developer", "company": "Google"},
+#         {"url": "https://example.com/data-scientist", "title": "Data Scientist", "company": "Microsoft"},
+#         {
+#             "url": "https://example.com/python-developer",
+#             "title": "Python Developer",
+#             "company": "Google",
+#         },  # Дубликат по url
+#     ]
+#
+#     json_handler.add_vacancies(new_vacancies)
+#     vacancies = json_handler.read_vacancies()
+#     print("Вакансии после добавления:", vacancies)
+#
+#     json_handler.remove_vacancies(criteria_func)  # Удаление вакансии по url
+#     vacancies = json_handler.read_vacancies()
+#     print("Вакансии после удаления:", vacancies)
