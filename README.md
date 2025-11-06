@@ -25,7 +25,7 @@ https://github.com/Oks-anaK/Course_work_Search_for_vacancies.git
 ### Установка зависимостей
 Для установки зависимостей, выполните команду:
 ```sh
-pip install -r requirements.txt
+poetry install
 ```
 
 ## Тестирование
