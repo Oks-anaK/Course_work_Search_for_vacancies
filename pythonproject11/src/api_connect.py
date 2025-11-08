@@ -16,7 +16,12 @@ class ApiVacancies(ABC):
     @abstractmethod
     def load_vacancies(self, keyword: str) -> None:
         """Метод для загрузки вакансий по ключевому слову."""
-        raise NotImplementedError
+        pass
+
+    @abstractmethod
+    def _connect_api(self) -> None:
+        """Приватный метод для подключения к API hh.ru."""
+        pass
 
     @property
     def api_key(self) -> Optional[str]:
