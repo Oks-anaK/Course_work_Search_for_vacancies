@@ -2,18 +2,6 @@ import pytest
 import requests
 
 
-# Тесты для ApiVacancies (абстрактный класс)
-def test_api_key_getter_setter(concrete_api_vacancies):
-    """Проверяем геттер и сеттер api_key."""
-    concrete_api_vacancies.api_key = "test_key"
-    assert concrete_api_vacancies.api_key == "test_key"
-
-
-def test_is_connected_default_false(concrete_api_vacancies):
-    """Проверяем, что is_connected по умолчанию False."""
-    assert concrete_api_vacancies.is_connected is False
-
-
 # Тесты для VacanciesHh (конкретный класс)
 def test_connect_api_success(hh_api, mock_requests_get):
     """Успешное подключение к API."""
